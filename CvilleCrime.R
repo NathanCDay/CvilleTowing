@@ -57,7 +57,7 @@ nicely <- function(breaks) {
 } 
 
 # saves from jungling around "date_breaks=" every scale_x_date()
-brks <- seq(date("2012-07-01"), date("2018-09-01"), "3 months")
+brks <- seq(date("2012-07-01"), date("2018-10-01"), "3 months")
 
 ## * seasonal
 ggplot(tib, aes(date)) +
@@ -67,7 +67,7 @@ ggplot(tib, aes(date)) +
     labs(title = "Charlottesville Police Reports",
          y = "# reports",
          x = NULL,
-         caption = "CrimeData via COD [2012-08-30 : 2017-08-27] ")
+         caption = "CrimeData via COD; Data[2012-08-30:2017-08-27] ")
 # hoos doing that spike in Sep - Oct?
 
 # set up tibble for a geom to cover Aug16-Oct31
@@ -85,7 +85,7 @@ ggplot(tib, aes(date)) +
     labs(title = "Monthyl police report totals",
          subtitle = "Rectangles highlight Aug 16th - Oct 31st",
          x = NULL, y = NULL,
-         caption = expression(paste(italic("Hoo"), "'s causing that uptick?", " Data shown 2012-08-16 - 2017-07-31")))
+         caption = expression(paste(italic("Hoo"), "'s causing that uptick?", " Data[2012-08-16:2017-07-31]")))
 
 ### Look at breakdown of offense labels seasonally
 tib %<>% filter(!is.na(offense)) # 1 case
@@ -148,7 +148,7 @@ ggplot(top16, aes(date, color = offense)) +
     facet_wrap(~offense, scales = "free_y") +
     theme(legend.position = "none") +
     labs(title = "Top 16 most reported offenses (collapsed)",
-         caption = "Data shown 2012-08-15 : 2017-08-01",
+         caption = "Data[2012-08-15:2017-08-01]",
          y = NULL, x = NULL)
 
 #### Towing -------------------------------------------------------------------
@@ -167,7 +167,7 @@ ggplot(tow, aes(as.numeric(month), fill = as.factor(year))) +
     viridis::scale_fill_viridis(name = NULL, discrete = TRUE, direction = -1) +
     labs(title = "Monthly tow totals",
          x = NULL, y = NULL,
-         caption = "Data shown 2013-01-01 : 2016-12-31")
+         caption = "Data[2013-01-01:2016-12-31]")
 
 #### * model -----------------------------------------------
 library(forecast)
@@ -233,12 +233,16 @@ ggplot(month_tib, aes(date, y, color = y)) +
               ymin = -0, ymax = Inf, color = NA, fill = "grey", alpha = .5) +
     geom_path(data = trend_tib, aes(x = date, y = y, color = NULL), linetype = 2) +
     geom_path(size = 1) +
-    geom_path(data = next_tib, aes(y = y), size = 2, alpha = .75) +
+    geom_path(data = next_tib, aes(y = y), size = 1, alpha = .5) +
+    annotate(geom = "text", label = "<<< Historical | Projected >>>", x = date("2017-08-01"), y = 10) +
     viridis::scale_color_viridis(name = NULL, direction = -1) +
-    scale_x_date(breaks = brks, labels = nicely, expand = c(0,0),
-                 limits = c(date("2012-08-15"), date("2018-11-01"))) +
+    scale_x_date(breaks = brks, date_minor_breaks = "1 month",
+                 labels = nicely, expand = c(0,0),
+                 limits = c(date("2012-08-16"), date("2018-11-01"))) +
     labs(title = "Forecasted monthly tows",
+         subtitle = "Mean trend as dashed line",
          y = NULL,
-         x = NULL) +
+         x = NULL,
+         caption = "Data[2012-08-16:2017-08-31]; Projections[2017-09-01:2018-10-31]") +
     theme(legend.position = "none")
     
