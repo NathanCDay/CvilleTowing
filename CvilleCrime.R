@@ -5,54 +5,85 @@
 
 setwd("~/future/CvilleTowing/")
 
+library(forcats) # y dis not in library(tidyverse)?
 library(lubridate)
 library(magrittr)
 library(tidyverse)
 
 theme_set(theme_minimal())
-
-
-#### Ins ----------------------------------------------------------------------
+ang <- theme(axis.text.x = element_text(angle = 45, vjust = .75, hjust = .75))
+#### Import -------------------------------------------------------------------
 
 # csv downloaded from http://opendata.charlottesville.org/datasets/crime-data
 tib <- read_csv("Crime_Data.csv")
 names(tib) %<>% tolower()
 
-head(tib)
+# head(tib)
+# str(tib)
 
 tib %<>% select(-recordid) %>%
     unite(address, blocknumber, streetname) %>%
     rename_at(vars(contains("reported")), funs(gsub("reported", "", .))) %>%
     mutate(hour = parse_time(hour, format = "%H%M"),
-           date = as.Date(date))
+           date = as.Date(date),
+           year = year(date),
+           month = month(date))
 
-#### Seasonal -----------------------------------------------------------------
+#### Explore -------------------------------------------------------------
 range(tib$date) # 5 years
 # "2012-08-30" "2017-08-27"
 
-# seasonal trends
+## * ggplot2 helpers ----
+
+# nicely labeler
+nicely <- function(breaks) {
+    
+    values <- as.character(breaks) %>% strsplit("-")
+    
+    m <- map(values, ~ as.numeric(.[2]) %>%
+                 month.abb[.])
+    y <- map(values, ~ gsub("20", "", .[1]))
+    
+    labels <- map2(m, y, ~ paste0(., "\n",
+                                 ifelse(. == "Jan",
+                                        .y,
+                                        "")))
+    
+    return(labels)
+    
+} 
+
+# saves from jungling around "date_breaks=" every scale_x_date()
+brks <- seq(date("2012-07-01"), date("2018-09-01"), "3 months")
+
+## * seasonal
 ggplot(tib, aes(date)) +
     geom_freqpoly(bins = 60) + # 60 months in 5 years
-    scale_x_date(date_breaks = "3 months", date_minor_breaks = "1 month",
-                 date_labels = "%b")
+    scale_x_date(breaks = brks, date_minor_breaks = "1 month",
+                 labels = nicely, expand = c(0,0)) +
+    labs(title = "Charlottesville Police Reports",
+         y = "# reports",
+         x = NULL,
+         caption = "CrimeData via COD [2012-08-30 : 2017-08-27] ")
 # hoos doing that spike in Sep - Oct?
 
-# set up tib for a geom to cover Aug16-Oct31
+# set up tibble for a geom to cover Aug16-Oct31
 students_back <- tibble(date = seq(as.Date("2012-09-01"), as.Date("2017-9-01"), length.out = 6),
                         date_min = date - ddays(16), # ~ Aug16
                         date_max = date %m+% months(2) )
 
 ggplot(tib, aes(date)) +
-    geom_rect(data = students_back, aes(xmin = date, xmax = date_max),
+    geom_rect(data = students_back, aes(xmin = date_min, xmax = date_max),
               ymin = 0, ymax = Inf, fill = "#f64617") +
     geom_freqpoly(bins = 60, color = "#0c2345", size = 1) + # 60 months in 5 years
-    scale_x_date(date_breaks = "3 months", date_minor_breaks = "1 month",
-                 date_labels = "%b%y") +
-    labs(title = "CPD Incident Reports",
-         subtitle = "Orange rectangles highlight Aug 16th - Oct 31st",
-         x = "MonYr",
-         y = "# of requests",
-         subtitle = "Hoos causing that uptick?")
+    scale_x_date(breaks = brks, date_minor_breaks = "1 month",
+                 labels = nicely, expand = c(0,0),
+                 limits = c(date("2012-08-14"), date("2017-08-15"))) +
+    labs(title = "Charlottesville Police Reports",
+         subtitle = "Rectangles highlight Aug 16th - Oct 31st",
+         x = NULL,
+         y = "# reports",
+         caption = expression(paste(italic("Hoo"), "'s causing that uptick?")))
 
 ### Look at breakdown of offense seasonally
 tib$offense %<>% as.factor()
