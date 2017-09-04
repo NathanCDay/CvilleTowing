@@ -154,6 +154,16 @@ plot(myts)
 fit <- stl(myts, s.window= "periodic")
 plot(fit)
 
+trend_fit <- HoltWinters(fit$time.series[,2])
+
+trend_pred <- forecast(trend_fit, 15)
+
+trend_plot <- tibble(date = seq(date("2017-09-01"), date("2018-11-01"), length.out = 15),
+                     y = trend_pred$mean)
+
+trend_plot %<>% bind_rows(tibble(date = seq(date("2012-09-01"), date("2017-04-01"), length.out = 56),
+                                        y = fit$time.series[,2] ), . )
+
 # triple exponential - models level, trend, and seasonal components
 fit_hw <- HoltWinters(myts)
 plot(fit_hw)
@@ -161,36 +171,40 @@ plot(fit_hw)
 forecast(fit_hw) %>%
     accuracy()
 
+fit_next <- forecast(fit_hw, 15)
 
-fit_next <- forecast(fit_hw, 12)
-
-plot_next <- tibble(date = seq(date("2017-09-01"), date("2018-08-01"), length.out = 12),
-                    y = fit_next$mean,
-                    ymin = fit_next$lower[,2],
-                    ymax = fit_next$upper[,2])
+plot_next <- tibble(date = seq(date("2017-09-01"), date("2018-11-01"), length.out = 15),
+                    y = fit_next$mean)
 # bolt on AUG 2017 info for smoothness
 plot_next %<>% bind_rows(filter(tow, month == "Aug", year == "2017") %>%
                               summarise(date = date("2017-08-01"),
-                                        y = n(),
-                                        ymin = y,
-                                        ymax = y), . )
+                                        y = n() ), . )
 
 # plot forcast
 month_tib %<>% mutate(date = paste(year, as.numeric(month), "01", sep = "-"))
 month_tib$date %<>% as.Date()
 
+# expand students_back
+students_back2 <- tibble(date = seq(as.Date("2012-09-01"), as.Date("2018-09-01"), length.out = 7),
+                        date_min = date - ddays(16), # ~ Aug16
+                        date_max = date %m+% months(2) )
+
 # projections plot
 ggplot(month_tib, aes(date, n, color = n)) +
-    geom_rect(data = students_back, aes(xmin = date_min, xmax = date_max, y = NULL),
+    geom_rect(data = students_back2, aes(xmin = date_min, xmax = date_max, y = NULL),
               ymin = -0, ymax = Inf, color = NA, fill = "grey", alpha = .5) +
-    geom_path() +
-    geom_path(data = plot_next, aes(y = y, color = y), size = 2) +
-    scale_x_date() +
-    viridis::scale_color_viridis(direction = -1) +
+    geom_path(data = trend_plot, aes(x = date, y = y, color = NULL), linetype = 2) +
+    geom_path(size = 1) +
+    geom_path(data = plot_next, aes(y = y, color = y), size = 2, alpha = .75) +
+    viridis::scale_color_viridis(name = "# tows", direction = -1) +
     scale_x_date(breaks = seq(date("2013-01-01"), date("2018-09-01"), length.out = 10),
-                 date_labels = "%b '%y", limits = c(date("2012-08-15"), date("2018-09-01"))) +
-    labs(title = "Towing forecast")
-    
+                 date_labels = "%b '%y", limits = c(date("2012-08-15"), date("2018-11-01"))) +
+    labs(title = "Towing forecast",
+         y = "# incidents",
+         x = NULL)
+
+ggplot(trend_plot, aes(date, y)) +
+    geom_line()
 
                 
 
