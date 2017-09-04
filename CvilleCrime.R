@@ -5,14 +5,16 @@
 
 setwd("~/future/CvilleTowing/")
 
-library(ggsci)
-library(forcats)
-library(lubridate)
-library(magrittr)
-library(tidyverse)
+library(forecast) # time-series modeling
+library(ggsci) # d3 color pallettes
+library(forcats) # fct tools
+library(lubridate) # date tools
+library(magrittr) # piping
+library(tidyverse) # data wranglin'
 
 theme_set(theme_minimal())
 ang <- theme(axis.text.x = element_text(angle = 45, vjust = .75, hjust = .75))
+
 #### Import -------------------------------------------------------------------
 
 # csv downloaded from http://opendata.charlottesville.org/datasets/crime-data
@@ -79,95 +81,98 @@ ggplot(tib, aes(date)) +
     geom_freqpoly(bins = 60, color = "#0c2345", size = 1) + # 60 months in 5 years
     scale_x_date(breaks = brks, date_minor_breaks = "1 month",
                  labels = nicely, expand = c(0,0),
-                 limits = c(date("2012-08-14"), date("2017-08-15"))) +
-    labs(title = "Charlottesville Police Reports",
+                 limits = c(date("2012-08-16"), date("2017-07-31"))) +
+    labs(title = "Monthyl police report totals",
          subtitle = "Rectangles highlight Aug 16th - Oct 31st",
-         x = NULL,
-         y = "# reports",
-         caption = expression(paste(italic("Hoo"), "'s causing that uptick?")))
+         x = NULL, y = NULL,
+         caption = expression(paste(italic("Hoo"), "'s causing that uptick?", " Data shown 2012-08-16 - 2017-07-31")))
 
-### Look at breakdown of offense seasonally
-tib$offense %<>% as.factor()
-tib %<>% filter(!is.na(offense))
+### Look at breakdown of offense labels seasonally
+tib %<>% filter(!is.na(offense)) # 1 case
 
-# as numeric hack to get interval to slice at based on arranged data.frame
-tib %>%
-    count(offense, sort = TRUE) %>%
-    mutate(offense = forcats::fct_inorder(offense)) %>%
-    ggplot(aes(as.numeric(offense), n)) +
-    geom_col() +
-    scale_x_continuous(breaks = seq(25,125,25))
+# clean out "-"s and "/"s as the represent subgroups and aliases
+tib$offense %<>% gsub("-.*", "", .) %>%
+    gsub("/.*", "", .)
 
-tib %>%
-    mutate(offense = forcats::fct_infreq(offense))
+# FYI this data is packed with a ton of great tags!!!
 
-# looking at the top 20
-top12 <- mutate(tib, offense = forcats::fct_infreq(offense)) %>%
-    filter(offense %in% levels(offense)[1:12]) %>%
+tib$offense %<>% as.factor() %>%
+    forcats::fct_infreq()
+
+sims_tib <- tibble(offense = round(rexp(nrow(tib), 1/6)))
+# as numeric hack to get around long labels 
+ggplot(tib, aes(as.numeric(offense), fill = "real data")) +
+    geom_bar(alpha = .5) +
+    geom_bar(data = sims_tib, aes(fill = "exponential sim"), alpha = .5) +
+    scale_fill_brewer(palette = "Set1", name = NULL) +
+    scale_x_continuous(breaks = seq(10,50,10), limits = c(0,50)) +
+    labs(title = "Top 50 tags compared to expoential distribution (rate = .1)",
+         y = "count per tag", x = "tag rank by frequency") +
+    theme(legend.position = c(.85, .85))
+
+
+### Write up style break here
+
+
+# looking at the top 25 tags
+t <- levels(tib$offense)[1:25]
+
+# look at top 16
+top16 <- mutate(tib, offense = forcats::fct_infreq(offense)) %>%
+    filter(offense %in% levels(offense)[1:16]) %>%
     droplevels()
 
-ggplot(top12, aes(offense)) +
+ggplot(top16, aes(offense)) +
     geom_bar(fill = NA, color = "black") +
     theme(axis.text.x = element_text(angle = 45))
 
 # make better (shorter) names
-decode <- c("Towing", "Assault", "Traffic", "Vandalism", "Larceny_other", "Drug",
-            "Citizen_Assist", "Suspicious_Activity", "Larceny_vehicle",
-            "Property_Found", "Property_Lost", "Burglary") %>%
-    set_names(levels(top12$offense))
-top12$offense %<>% decode[.] %>% forcats::fct_infreq()
+decode <- c("Larceny", "Assault", "Towed", "Traffic",
+            "Vandalism", "Property", "Drugs", "Assist Citizen",
+            "Suspicious", "Fraud", "Burglary", "Animal",
+            "Runaway", "DUI", "Disorderly", "Missing Person") %>%
+    set_names(levels(top16$offense))
+
+# use infreq() again
+top16$offense %<>% decode[.] %>%
+    forcats::fct_infreq()
 
 # freqpoly version in facets
-ggplot(top12, aes(date, color = offense)) +
+ggplot(top16, aes(date, color = offense)) +
     geom_rect(data = students_back, aes(xmin = date_min, xmax = date_max),
               ymin = -0, ymax = Inf, color = NA, fill = "grey", alpha = .5) +
-    geom_freqpoly(alpha = .5, bins = 60, size = 1) +
+    geom_freqpoly(alpha = .75, bins = 60, size = 1) +
     scale_x_date(breaks = seq(date("2013-01-01"), date("2017-01-01"), length.out = 5),
-                 date_labels = "%y", limits = c(date("2012-08-15"), date("2017-11-01"))) +
+                 date_labels = "'%y", limits = c(date("2012-08-15"), date("2017-08-16"))) +
     scale_color_d3(palette = "category20") +
     facet_wrap(~offense, scales = "free_y") +
-    theme(legend.position = "none")
+    theme(legend.position = "none") +
+    labs(title = "Top 16 most reported offenses (collapsed)",
+         caption = "Data shown 2012-08-15 : 2017-08-01",
+         y = NULL, x = NULL)
 
 #### Towing -------------------------------------------------------------------
 # looking at towing more focuse
-tow <- filter(top10, offense ==  "Towing")
+tow <- filter(top16, offense ==  "Towed")
 
-#### look for yearly trends
-tow %<>% mutate(year = lubridate::year(date))
-
-# drop 2012 bc partial year (starts 2012-08-30)
-tow %<>% filter(year != "2012")
-
-ggplot(tow, aes(year, fill = ..count..)) +
-    geom_bar() +
-    viridis::scale_fill_viridis(name = NULL, direction = -1) + # y dis not ggplot2 default yet
-    labs(title = "Yearly towing in Charlottesville",
-         subtitle = "2017 data stops 2017-08-27",
-         y = "# incidents",
-         x = NULL,
-         caption = "CPD Reported 2013-01-01 : 2017-08-27")
-
-#### Now look for high-towing months
-tow %<>% mutate(month = lubridate::month(date, label = T))
-
-# drop 2017
+#### * look closer -----------
+# drop 2012 and 2017 bc partial years
+tow %<>% filter(!(year %in% c("2012", "2017")))
+# drop 2017 
 tow %<>% filter(year != "2017")
 
 ggplot(tow, aes(as.numeric(month), fill = as.factor(year))) +
     geom_histogram(bins = 12) +
-    scale_x_continuous(breaks = 1:12, labels = month.abb) +
-    scale_fill_brewer(name = NULL, palette = "Dark2") +
-    labs(title = "Total monthly towing",
-         x = NULL,
-         y = "# incidents",
-         caption = "CPD Reported 2013-01-01 : 2016-12-31")
+    scale_x_continuous(breaks = 1:12, labels = month.abb, expand = c(0,0)) +
+    viridis::scale_fill_viridis(name = NULL, discrete = TRUE, direction = -1) +
+    labs(title = "Monthly tow totals",
+         x = NULL, y = NULL,
+         caption = "Data shown 2013-01-01 : 2016-12-31")
 
-#### * model yearly increases -----------------------------------------------
+#### * model -----------------------------------------------
 library(forecast)
-
 # reset tow to only include all data
-tow <- filter(top10, offense ==  "Towing")
-# drop august 2012
+tow <- filter(top16, offense ==  "Towed")
 
 month_tib <- tow %>% mutate(month = month(date, label = TRUE),
                 year = as.factor((year(date)))) %>%
