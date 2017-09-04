@@ -5,7 +5,8 @@
 
 setwd("~/future/CvilleTowing/")
 
-library(forcats) # y dis not in library(tidyverse)?
+library(ggsci)
+library(forcats)
 library(lubridate)
 library(magrittr)
 library(tidyverse)
@@ -101,29 +102,30 @@ tib %>%
     mutate(offense = forcats::fct_infreq(offense))
 
 # looking at the top 20
-top10 <- mutate(tib, offense = forcats::fct_infreq(offense)) %>%
-    filter(offense %in% levels(offense)[1:10]) %>%
+top12 <- mutate(tib, offense = forcats::fct_infreq(offense)) %>%
+    filter(offense %in% levels(offense)[1:12]) %>%
     droplevels()
 
-ggplot(top10, aes(offense)) +
+ggplot(top12, aes(offense)) +
     geom_bar(fill = NA, color = "black") +
     theme(axis.text.x = element_text(angle = 45))
 
 # make better (shorter) names
 decode <- c("Towing", "Assault", "Traffic", "Vandalism", "Larceny_other", "Drug",
-            "Citizen_Assist", "Suspicious_Activity", "Larceny_vehicle", "Property_Found") %>%
-    set_names(levels(top10$offense))
-top10$offense %<>% decode[.] %>% forcats::fct_infreq()
+            "Citizen_Assist", "Suspicious_Activity", "Larceny_vehicle",
+            "Property_Found", "Property_Lost", "Burglary") %>%
+    set_names(levels(top12$offense))
+top12$offense %<>% decode[.] %>% forcats::fct_infreq()
 
 # freqpoly version in facets
-ggplot(top10, aes(date, color = offense)) +
+ggplot(top12, aes(date, color = offense)) +
     geom_rect(data = students_back, aes(xmin = date_min, xmax = date_max),
               ymin = -0, ymax = Inf, color = NA, fill = "grey", alpha = .5) +
-    geom_freqpoly(alpha = .5, bins = 60, size = 2) +
+    geom_freqpoly(alpha = .5, bins = 60, size = 1) +
     scale_x_date(breaks = seq(date("2013-01-01"), date("2017-01-01"), length.out = 5),
                  date_labels = "%y", limits = c(date("2012-08-15"), date("2017-11-01"))) +
-    scale_color_d3() +
-    facet_wrap(~offense) +
+    scale_color_d3(palette = "category20") +
+    facet_wrap(~offense, scales = "free_y") +
     theme(legend.position = "none")
 
 #### Towing -------------------------------------------------------------------
