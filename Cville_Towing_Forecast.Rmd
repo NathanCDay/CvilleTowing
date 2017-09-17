@@ -1,0 +1,322 @@
+---
+title: "Opening the Charlottesville Open Data Portal with R"
+subtitle: "A seasonsal model for future towing"
+date: "2017 September 4"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+---
+
+```{r hidden, include=FALSE}
+setwd("~/future/CvilleTowing/")
+```
+
+![Open up already!](www/cvilletow/open_up.gif).
+
+# Intro
+
+I attended my first [Charlottesville Data Science Meetup]("https://www.meetup.com/CharlottesvilleDataScience/events/242006576/") last month, for the launch of the city's [Open Data Portal]("http://opendata.charlottesville.org/"). The meeting unveiled the new ODP, which consolidates a bunch of Charlottesville city records in one place, including Census, asesssement, development, traffic and public safety data. The meetup featured a nice introduction to the portal and [OpenSource Connections](http://opensourceconnections.com/) provided free craft beer and free Papa Johns!!!
+
+I think the OPD can be a positive change for the city and I really hope that data community steps up and drives better decisions for Charlottesville. So I used my long Labor day weekend to markdown up a quick analysis for using the portal data to do time-series forecasting with `R`.
+
+Overall I think the portal is cleanly designed and easy to navigate (big shout out to the team of talent that made it a reality, thank you!). And most importantly the data is nicely formatted and there is even an API (that I have yet to use) if you want to access programatically! Let's dive into the analysis and I semi-apoligize for that bad pun in the title.
+
+# Import
+
+I am a big user/believer of the R packages [`magrittr`](https://cran.r-project.org/web/packages/magrittr/vignettes/magrittr.html) and [`tidyverse`](https://www.tidyverse.org/), so fair warning, this analysis is unabashadly pipe-heavy.
+
+```{r globals, message = FALSE, warning = FALSE}
+library(forecast) # time-series modeling
+library(ggsci) # d3 color pallettes
+library(forcats) # fct tools
+library(lubridate) # date tools
+library(magrittr) # piping
+library(tidyverse) # data wranglin'
+
+# ggplot set up
+theme_set(theme_minimal())
+nicely <- function(breaks) {
+    values <- as.character(breaks) %>% strsplit("-")
+    m <- map(values, ~ as.numeric(.[2]) %>% month.abb[.])
+    y <- map(values, ~ gsub("20", "", .[1]))
+    labels <- map2(m, y, ~ paste0(., "\n", ifelse(. == "Jan", .y, "")))
+    return(labels) } 
+brks <- seq(date("2012-07-01"), date("2018-10-01"), "3 months")
+```
+
+I decided to start my OPD journey exploring the [Public Safety > Crime Data](http://opendata.charlottesville.org/datasets/crime-data), mainly because I've worked with crime data in the [past](./dc_crime.html). So I manually downloaded the csv from the link above and started a GitHub repo. I have yet to use the API, perhaps another day.
+
+```{r read_in, warning = FALSE, message = FALSE}
+tib <- read_csv("~/future/CvilleTowing/Crime_Data.csv")
+names(tib) %<>% tolower()
+
+# these don't jive well with markdown
+# head(tib)
+str(tib, max.level = 1)
+```
+
+The function `read_csv` imputes the column types from the first 1000 rows and never coherces characters to factors, which are both nice upgrades from the baseR `read.csv`. We can see in this case it correctly guessed `datereported` as `POSIXct`, but it didn't call `hourreported` as `POSIXct`, so it's not magic but the `read_file` family of functions definatly save some tidying time.
+
+While the data comes off the shelf nicely formatted (thank you, thank you and thank you) I still wanted to make some minor adjustments before I got into exploring.
+
+```{r tidy, warning = FALSE}
+tib %<>% select(-recordid) %>%
+    unite(address, blocknumber, streetname) %>%
+    rename_at(vars(contains("reported")), funs(gsub("reported", "", .))) %>%
+    mutate(hour = parse_time(hour, format = "%H%M"),
+           date = as.Date(date),
+           year = year(date),
+           month = month(date))
+```
+
+# Explore
+
+Now that our data has been shaped up into something nice and plottable, let start looking at exactly how much data we have here.
+
+```{r range, results='hold'}
+ggplot(tib, aes(date)) +
+    geom_freqpoly(bins = 60) + # 60 months in 5 years
+    scale_x_date(breaks = brks, date_minor_breaks = "1 month",
+                 labels = nicely, expand = c(0,0)) +
+    labs(title = "Charlottesville police reports",
+         y = "# reports",
+         x = NULL,
+         caption = "Data[2012-08-30:2017-08-27] ")
+```
+
+Looks like we have five years of continuous report data going back to September 2012, not too shabby for a single csv. And the total number of cases reported has been steady, maybe even decreasing slightly each year, which is good news for any community. It also looks like there is a consistant spike in the number of police reports each year around September and October, I wonder if we can figure out hoo/what is responsible for that autumn jump?
+
+## Hoo dunnit?
+
+I don't work with date or time data very often but when I do I always use the [`lubridate`](https://cran.r-project.org/web/packages/lubridate/vignettes/lubridate.html) package. It maintains the tidy syntax and allows for easy manipulation (adding, subtracting, building sequence) of date and time period objects. Let's use it here to build an series of annually reoccuring date ranges from mid-August to the end of October to feed in to `geom_rect()` highlight our window of interest.
+
+```{r students, warning = F}
+students_back <- tibble(date = seq(as.Date("2012-09-01"), as.Date("2017-9-01"), length.out = 6),
+                        date_min = date - ddays(16), # ~ Aug16
+                        date_max = date %m+% months(2) ) # add to month
+
+ggplot(tib, aes(date)) +
+    geom_rect(data = students_back, aes(xmin = date_min, xmax = date_max),
+              ymin = 0, ymax = Inf, fill = "#f64617") +
+    geom_freqpoly(bins = 60, color = "#0c2345", size = 1) + # 60 months in 5 years
+    scale_x_date(breaks = brks, date_minor_breaks = "1 month",
+                 labels = nicely, expand = c(0,0),
+                 limits = c(date("2012-08-16"), date("2017-07-31"))) +
+    labs(title = "Charlottesville police reports",
+         subtitle = "Rectangles highlight Aug 16th - Oct 31st",
+         x = NULL, y = NULL,
+         caption = expression(paste(italic("Hoo"), "'s causing that uptick?", " Data[2012-08-16:2017-07-31]")))
+```
+
+We all know correlation does not equal causation. But I would wager that this pattern is real and common for any community with a college (or transient population). Especially for Cville, where the population swells by roughly 25% percent when the undergrads are in town, you would expect bump in all civic activity, inlcuding unfortunately crime too.
+
+While this annual pattern is interesting, looking at the total counts doesn't really tell us anything specific. Perhaps we can pull apart the total values and find some specific trends within single offense tags.
+
+## Offense frequency
+
+I'm happy to report that this data is tagged very well, there are a few inconsistant spellings but I can live with that for 32k rows. Lets dive into the tags now, using the factor focused [`library(forcats)`](http://forcats.tidyverse.org/) to help us arrange the offenses based on frequency and which really helps in plot preparation.
+
+```{r}
+# there is a single incident (# 201404995) that is NA for offense
+tib %<>% filter(!is.na(offense))
+
+forcats::fct_inorder(tib$offense) %>% levels() %>% .[1:25]
+```
+
+The list of the top 25 most frequent offense tags looks pretty consistant, all uppercase, with the "-" being consistantly used to show sub-groups and the "/" being used to show aliases. To get a macro view of the type of crimes being commited I am going to collapse the subgroups moving forward. However I want to point out, this detailed naming system give us the ability to easily investigate subgroup differences, it's a really nice suprise that it is formatted so well!
+
+Probably my favorite functions out of `library(forcats)` are `fct_infreq()` and `fct_inorder()` The first does the equivilant of `table() %>% sort(descreasing = T) %>% unique()` to define the the levels of a factor, with the most frequent assigned lowest levels by default. It's counter-part `fct_inorder()` assigns levels based on current tibble order, and this can be equally useful when piped after `arrange()`. `arrange(mtcars, -cyl) %>% mutate(cyl = fct_inorder(cyl))`. If you take one thing away from this write up hopefully these two are it, they are nice additions to R and big time savers for me. 
+
+```{r clean targs, warning = FALSE}
+tib$offense %<>% gsub("-.*", "", .) %>%
+    gsub("/.*", "", .)
+
+# reset levels
+tib$offense %<>% as.factor() %>%
+    forcats::fct_infreq()
+```
+
+Now we have our tags collapsed and ordered by frequency, let's look at the distribution of reports across offenses. I'm using a little `as.numeric(any_factor)` hack here to help avoid too much axis text. Also since most time-series data follows an exponential distribution, I went ahead and simulated a random draw from an expoential distribution with a mean of 6. This distribution comparison serves as a visualize sanity check to make sure we're on the right path.
+
+```{r distribution, warning = FALSE}
+# simulated data
+sims_tib <- tibble(offense = round(rexp(n = nrow(tib), rate = 1/6)))
+# rate is defined as 1 / mu for exponential distributions
+
+ggplot(tib, aes(as.numeric(offense), fill = "real data")) +
+    geom_bar(alpha = .5) +
+    geom_bar(data = sims_tib, aes(fill = "exponential sim"), alpha = .5) +
+    scale_fill_brewer(palette = "Set1", name = NULL) +
+    scale_x_continuous(breaks = seq(10,50,10), limits = c(0,50)) +
+    labs(title = "Top 50 tags compared to expoential distribution (mu = 6)",
+         y = "tag count", x = "tag rank by count") +
+    theme(legend.position = c(.85, .85))
+```
+
+The real data and the simulated data line up really well! I like doing these checks early on in an analysis, just to make sure I'm not missing any unexpected features or I'm not wasting my time on noise.
+
+Since we are starting to feel pretty good about out data now, let's take a closer look at the top 16 tags and see if we can detect any interesting patterns that might help explain the overall spikes we were seeing in total cases in September and October.
+
+```{r top16, warning = FALSE}
+top16 <- mutate(tib, offense = forcats::fct_infreq(offense)) %>%
+    filter(offense %in% levels(offense)[1:16]) %>%
+    droplevels()
+
+# decode to shorter names for plotting
+decode <- c("Larceny", "Assault", "Towing", "Traffic",
+            "Vandalism", "Property", "Drugs", "Assist Citizen",
+            "Suspicious", "Fraud", "Burglary", "Animal",
+            "Runaway", "DUI", "Disorderly", "Missing Person") %>%
+    set_names(levels(top16$offense))
+
+# use forcats::fct_infreq() again
+top16$offense %<>% decode[.] %>%
+    forcats::fct_infreq()
+
+ggplot(top16, aes(date, color = offense)) +
+    geom_rect(data = students_back, aes(xmin = date_min, xmax = date_max),
+              ymin = -0, ymax = Inf, color = NA, fill = "grey", alpha = .5) +
+    geom_freqpoly(alpha = .75, bins = 60, size = 1) +
+    scale_x_date(breaks = seq(date("2013-01-01"), date("2017-01-01"), length.out = 5),
+                 date_labels = "'%y", limits = c(date("2012-08-15"), date("2017-08-16"))) +
+    scale_color_d3(palette = "category20") +
+    facet_wrap(~offense, scales = "free_y") +
+    theme(legend.position = "none") +
+    labs(title = "Top 16 most reported offenses (collapsed)",
+         caption = "Data[2012-08-15:2017-08-01]",
+         y = NULL, x = NULL)
+```
+
+It looks like "Assult", "Towing", "Vandalism" and "Disorderly" all have yearly spikes during our interval of interest. "Towing" is the only one of those that looks like it has been increasing steadily over the last five years. I will be focusing on "Towing" only in the time-series modeling next, but remeber that "Assult", had sub-categories that we collapsed earlier, so that might be an interesting area to look into more...
+
+## Towing forecast
+
+To get start with towing lets connfirm that year over year increase, we saw in the sparklines and get a better handle on the seasonal distribution with a nice stacked histogram.
+
+```{r tow, warning = FALSE}
+tow <- filter(top16, offense == "Towing")
+
+# drop 2012 and 2017 bc partial years
+tow %<>% filter(!(year %in% c("2012", "2017")))
+
+ggplot(tow, aes(as.numeric(month), fill = as.factor(year))) +
+    geom_rect(xmin = 8, xmax = 10.5, ymax = Inf, ymin = 0, fill = "grey", alpha = .5) +
+    geom_histogram(bins = 12) +
+    scale_x_continuous(breaks = 1:12, labels = month.abb, expand = c(0,0)) +
+    viridis::scale_fill_viridis(name = NULL, discrete = TRUE, direction = -1) +
+    labs(title = "Monthly tow-tals",
+         x = NULL, y = NULL,
+         caption = "Data[2013-01-01:2016-12-31]") +
+    theme(legend.position = c(.95, .9))
+```
+
+We can see clearly that the big annual spike is focused in Sept-Oct. Perhaps there is another variable, besides undergrads being on grounds, that can explain this? I wonder if home football games have anything to do with it...
+
+Since it is clear that this data set has repeated annual patterns, if we want to model it, a simple `lm()` won't do for accurately projecting future monthly towing totals. The wonderful `library(forecast)` is on version 8.1 as of this typing. It is the project of [Rob Hyndman](https://github.com/robjhyndman), proffesor of Statistics at Monash University (Aus), and have been in development since 2012 and is a standard tool for time-series analysis with `R`. It comes loaded with a bunch of customizable functions for smoothing and decomposing, but here we will stick to a few basic functions and use most of the default parameters just to show how easy to use it is.
+
+The first step is to create a `time.series` object, essentially the response values labelled by period.
+
+```{r model}
+# reset to all data
+tow <- filter(top16, offense == "Towing")
+
+month_tib <- arrange(tow, year, month) %>%
+    group_by(year, month) %>%
+    tally() %>%
+    ungroup() %>%
+    slice(-1) # drop Aug 2012 (only 6 cases)
+
+month_vec <- select(month_tib, n) %>%
+    unlist()
+
+# build time-series object
+myts <- ts(month_vec, start = c(2012, 9), frequency = 12)
+myts
+```
+
+Now that we have resructed our data for `library(forecast)` we can take advantage of its really nice modeling tools. To start we can peak at the underlying trends with the decomposition function `stl()`.
+
+```{r stl, warning = FALSE}
+decomp_fit <- stl(myts, s.window= "periodic")
+
+plot(decomp_fit)
+```
+
+That was dangerously easy to do and look at this nice panel we get returned. It shows the raw data, seasonal model, trend model and a resiual plot for the trend model. Let's now build a model that combine the seasonal and trend components via `HoltWinters()` to project the next years worth of towing reports.
+
+```{r next, message = FALSE, warning = FALSE}
+hw_fit <- HoltWinters(myts)
+# plot(hw_fit)
+
+# make predictions 
+month_preds <- forecast(hw_fit, 15) %>% # returns Sep17 : Oct18
+    as.tibble %>%
+    .[[1]]
+# and tidy results for plotting
+next_tib <- tibble(date = seq(date("2017-09-01"), date("2018-11-01"), "1 month"),
+                    y = month_preds)
+
+# format month_tib to match next_tib
+month_tib %<>% mutate(date = date(paste(year, month, "01", sep = "-"))) %>%
+    rename(y = n)
+
+# bind on AUG17 info for smoothness
+aug17 <- month_tib[nrow(month_tib),]
+next_tib %<>% bind_rows(aug17, .)
+```
+
+That was a couple of steps all at once, sorry I'm not sure how to break it down better. Most of that code is just for extracting and tidying the `forecast()` values to get the data ready for trend plotting and there is more than one way to wrangle those, so use whatever tools you're most comfortable with.
+
+Just to really drive home the difference of seasonal models, let's build out an identical range of predictions for the trend model too.
+
+```{r trend_mod, warning = FALSE}
+trend_fit <- HoltWinters(decomp_fit$time.series[,2])
+trend_preds <- forecast(trend_fit, 15) %>%
+    as.tibble %>%
+    .[[1]]
+
+# bind in old data in model
+trend_past <- as.numeric(decomp_fit$time.series[,2])
+trend_tib <- tibble(date = seq(date("2012-09-01"), date("2018-11-01"), by = "1 month"),
+                     y = c(trend_past, trend_preds))
+```
+
+Now all we have left to do is plot. Bad news first, the forecast is calling for even more tow, this year and next. 
+
+```{r fin_plot, warning = FALSE}
+# expand students_back for future
+students_back2 <- tibble(date = seq(as.Date("2012-09-01"), as.Date("2018-09-01"), "1 year"),
+                        date_min = date - ddays(16), # ~ Aug16
+                        date_max = date %m+% months(2) )
+
+# format next_tib
+next_tib$year <- year(next_tib$date)
+
+# projections plot
+ggplot(month_tib, aes(date, y, color = y)) +
+    geom_rect(data = students_back2, aes(xmin = date_min, xmax = date_max, y = NULL),
+              ymin = -0, ymax = Inf, color = NA, fill = "grey", alpha = .5) +
+    geom_path(data = trend_tib, aes(x = date, y = y, color = NULL), linetype = 2) +
+    geom_path(size = 1) +
+    geom_path(data = next_tib, aes(y = y), size = 1, alpha = .5) +
+    annotate(geom = "text", label = "<<< Historical | Projected >>>", x = date("2017-08-01"), y = 110, size = 3) +
+    viridis::scale_color_viridis(name = NULL, direction = -1) +
+    scale_x_date(breaks = brks, date_minor_breaks = "1 month",
+                 labels = nicely, expand = c(0,0),
+                 limits = c(date("2012-08-16"), date("2018-11-01"))) +
+    labs(title = "Forecasted monthly tow-tals",
+         subtitle = "Mean trend as dashed line",
+         y = NULL,
+         x = NULL,
+         caption = "Data[2012-08-16:2017-08-31]; Projections[2017-09-01:2018-10-31]") +
+    theme(legend.position = "none")
+```
+
+You can see the mean trend moving back toward the historical average in the projections, while the combined seasonal-trend model keeps climbing. Since time-series models are relatively new to me, I am still learning the best strategies and hope to have some more details to provide at the data introduction session.
+
+I hope this was a mildly-compelling narative for not parking illegally with some pretty plots sprinkled in. Really I hope this outline is a useful template for jumping into the ODP with R and a nice use case for the `tidyverse` and some its accessory packages in a time-series analysis.
+
+I know there a lot of trends in the Crime Data set that deserve more exploration, so let's get busy. Hopefully we can use this portal to have fun and build a better, more informed community. See you at the next Meetup!
