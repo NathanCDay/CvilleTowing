@@ -1,5 +1,4 @@
 
-setwd("~/future/CvilleTowing/CrimeCast/")
 library(shiny)
 library(leaflet)
 library(htmltools)
