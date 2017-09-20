@@ -13,7 +13,7 @@ shinyUI(fluidPage(
   sidebarLayout(
     sidebarPanel(
        selectizeInput("offense", "Offense:", choices = tib$offense,
-                      selected = "Towed", multiple = T),
+                      selected = "Towing", multiple = T),
        sliderInput("range", "Range:", as.Date("2016-01-01"), as.Date("2016-12-31"),
                    c(as.Date("2016-01-01"), as.Date("2016-12-31")),
                    timeFormat = "%D"),
@@ -24,13 +24,18 @@ shinyUI(fluidPage(
        # textOutput("check"),
        leafletOutput("map", height = 600),
        div(hr(),
-           p(a("built by Nate",
+           p("made by",
+             a("Nate",
              href = "https://nateday.me",
              target = "_blank"),
-             "with",
-           a("data from Charlottesville Open Data Portal",
+             "data from the",
+           a("Charlottesville Open Data Portal",
              href = "http://opendata.charlottesville.org/datasets?t=Public%20Safety",
-             target = "_blank") )
+             target = "_blank"),
+           "code on",
+           a("GitHub",
+             href = "https://github.com/NathanCDay/CvilleTowing/tree/master/CrimeCast",
+             target = "_blank"))
        )
     )
   )

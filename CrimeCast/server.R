@@ -48,7 +48,7 @@ shinyServer(function(input, output) {
     # output$check <- renderPrint(input$map_bounds[c(2,4)] %>% as.numeric() %>% mean)
 
    
-      map_output <- function(lat = "38.0293", lon = "-78.4767") {
+      map_output <- function(lat = "38.0283", lon = "-78.4767") {
           
           if (!input$chloro) {
               
@@ -57,7 +57,7 @@ shinyServer(function(input, output) {
                 addCircleMarkers(color = ~offense_pal(color), weight = 1, radius = 5,
                                 opacity = .5, fillOpacity = .15,
                                 label = ~map(label, HTML)) %>%
-                addLegend("bottomright", pal = offense_pal, values = ~color,
+                addLegend("topright", pal = offense_pal, values = ~color,
                         title = "Reported offense")
           }
           if (input$chloro) {
@@ -66,7 +66,7 @@ shinyServer(function(input, output) {
                     addPolygons(color = "#a5a597", weight = 1, smoothFactor = 0.3, fillOpacity = .5,
                     fillColor = ~pal(log(n+1)),
                     label = ~map(label, HTML)) %>%
-                  addLegend("bottomright", pal = pal, values = ~n, opacity = .5,
+                  addLegend("topright", pal = pal, values = ~n, opacity = .5,
                             title = "Total Reports")
           }
           return(out)
