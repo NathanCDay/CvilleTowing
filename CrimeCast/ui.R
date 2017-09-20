@@ -13,7 +13,7 @@ shinyUI(fluidPage(
   sidebarLayout(
     sidebarPanel(
        selectizeInput("offense", "Offense:", choices = tib$offense,
-                      multiple = T),
+                      selected = "Towed", multiple = T),
        sliderInput("range", "Range:", as.Date("2016-01-01"), as.Date("2016-12-31"),
                    c(as.Date("2016-01-01"), as.Date("2016-12-31")),
                    timeFormat = "%D"),
@@ -21,15 +21,17 @@ shinyUI(fluidPage(
     ),
     
     mainPanel(
-       textOutput("check"),
+       # textOutput("check"),
        leafletOutput("map", height = 600),
-       div(a("data from Charlottesville Open Data Portal",
-             href = "http://opendata.charlottesville.org/datasets?t=Public%20Safety",
-             target = "_blank"),
-           br(),
-           a("built by Nate",
+       div(hr(),
+           p(a("built by Nate",
              href = "https://nateday.me",
-             target = "_blank"))
+             target = "_blank"),
+             "with",
+           a("data from Charlottesville Open Data Portal",
+             href = "http://opendata.charlottesville.org/datasets?t=Public%20Safety",
+             target = "_blank") )
+       )
     )
   )
 ))

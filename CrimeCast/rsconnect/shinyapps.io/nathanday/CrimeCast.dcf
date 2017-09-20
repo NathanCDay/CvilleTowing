@@ -5,8 +5,9 @@ account: nathanday
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 215693
-bundleId: 985275
+bundleId: 988841
 url: https://nathanday.shinyapps.io/CrimeCast/
-when: 1505674643.614
+when: 1505883957.10269
 asMultiple: FALSE
 asStatic: FALSE
+ignoredFiles: tib2.RDS|www/opd.png

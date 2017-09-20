@@ -34,7 +34,7 @@ shinyServer(function(input, output) {
             chl$label <- paste0(chl$NAME, "<br>",
                                 "Pop: ", formatC(chl$POPULATION, big.mark = ","), "<br>",
                                 "Reports: ", chl$n, "<br>",
-                                "Rate: ", round(chl$density,2))
+                                "Rate: ", round(chl$density,3))
             return(chl)
 
         }
@@ -45,13 +45,14 @@ shinyServer(function(input, output) {
         }
     })
     
-    output$check <- renderPrint(input$map_bounds)
+    # output$check <- renderPrint(input$map_bounds[c(2,4)] %>% as.numeric() %>% mean)
+
    
-      map_output <- function() {
+      map_output <- function(lat = "38.0293", lon = "-78.4767") {
           
           if (!input$chloro) {
-              out <- leaflet(data(), options = leafletOptions(minZoom = 12, maxZoom = 15)) %>%
-                setView("-78.4767", "38.0293", 13) %>%
+              
+              out <- leaflet(data(), options = leafletOptions(minZoom = 13, maxZoom = 16)) %>%
                 addProviderTiles("CartoDB.Positron") %>% 
                 addCircleMarkers(color = ~offense_pal(color), weight = 1, radius = 5,
                                 opacity = .5, fillOpacity = .15,
@@ -60,14 +61,33 @@ shinyServer(function(input, output) {
                         title = "Reported offense")
           }
           if (input$chloro) {
-              lat <- mean(input$map_bounds[])
-              out <- leaflet(data(), options = leafletOptions(minZoom = 12, maxZoom = 17)) %>%
+              out <- leaflet(data(), options = leafletOptions(minZoom = 13, maxZoom = 15)) %>%
                     addProviderTiles("CartoDB.Positron") %>%
                     addPolygons(color = "#a5a597", weight = 1, smoothFactor = 0.3, fillOpacity = .5,
-                    fillColor = ~pal(n),
-                    label = ~map(label, HTML))
+                    fillColor = ~pal(log(n+1)),
+                    label = ~map(label, HTML)) %>%
+                  addLegend("bottomright", pal = pal, values = ~n, opacity = .5,
+                            title = "Total Reports")
           }
           return(out)
       }
+      observe({
+          hld <- input$chloro
+          
+          isolate({
+              cur_zoom <- input$map_zoom
+              cur_lat <- input$map_bounds[c(2,4)] %>% as.numeric() %>% mean
+              cur_lon <-input$map_bounds[c(1,3)] %>% as.numeric() %>% mean
+              
+              if(hld) {
+                  new_zoom <- 12
+              leafletProxy("map") %>%
+                  setView(cur_lat, cur_lon, zoom = new_zoom) }
+              
+              if (!hld) {
+                  leafletProxy("map") %>%
+                      setView(cur_lat, cur_lon, zoom = cur_zoom) }
+          })
+      })
       output$map <- renderLeaflet(map_output())
 })

@@ -53,9 +53,9 @@ tib %<>% mutate(hour = gsub("2400", "0000", hour), # miscoded?
 tib %<>% filter(offense %in% levels(offense)[1:16]) %>%
     droplevels()
 # make better (shorter) names
-decode <- c("Larceny", "Assault", "Towed", "Traffic",
+decode <- c("Larceny", "Assault", "Towing", "Traffic",
             "Vandalism", "Property", "Drugs", "Assist Citizen",
-            "Suspicious", "Fraud", "Burglary", "Animal",
+            "Suspicious Activity", "Fraud", "Burglary", "Animal",
             "Runaway", "DUI", "Disorderly", "Missing Person") %>%
     set_names(levels(tib$offense))
 
