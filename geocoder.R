@@ -168,8 +168,8 @@ tib2 <- mutate_at(tib, vars(lat, lon), funs(jitter(., amount = .0005)))
 tib2 %>% unite(loc, lon, lat) %>% with(table(loc)) %>% sort()
 
 # make a custom color var to collapse similar offenses
-decode <- c("steal", "attack", "towing", "traffic", "vandal", "vandal", "drug", "help",
-            "sketch", "steal", "steal", "help", "help", "traffic", "sketch", "help") %>%
+decode <- c("theft", "assault", "towing", "vehicular", "vandalism", "vandalism", "drugs", "assist",
+            "sketchiness", "theft", "theft", "assit", "assist", "vehicular", "sketchiness", "assist") %>%
     set_names(levels(tib2$offense))
 
 tib2$color <- decode[tib2$offense] %>% fct_inorder()
@@ -216,7 +216,7 @@ leaflet(cville_json,
 library(rgeos)
 library(rgdal)
 
-dat <- select(tib, lon, lat, offense)
+dat <- select(tib2, lon, lat, offense)
 coordinates(dat) <-  ~ lon + lat
 proj4string(dat) <- proj4string(cville_json)
 
@@ -225,7 +225,7 @@ res <- over(dat, cville_json)
 table(complete.cases(res)) # 210 didn't match, those outside of the city like foxfield
 
 tib3 <- bind_cols(tib2, select(res,NAME)) %>% filter(!is.na(NAME))
-saveRDS(tib3, "tib3.RDS")
+saveRDS(tib3, "CrimeCast/tib3.RDS")
 
 tib_sum <- group_by(tib3, NAME) %>%
     count()

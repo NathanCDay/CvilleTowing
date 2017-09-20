@@ -6,9 +6,9 @@ library(shinythemes)
 tib <- readRDS("tib3.RDS")
 
 shinyUI(fluidPage(
-    shinythemes::themeSelector(),
+    theme = "united",
   
-    titlePanel("Cville Crime Data : 2016"),
+    titlePanel("Charlottesville Crime Reports: 2016"),
     
   sidebarLayout(
     sidebarPanel(
@@ -21,8 +21,15 @@ shinyUI(fluidPage(
     ),
     
     mainPanel(
-       # textOutput("check"),
-       leafletOutput("map", height = 600)
+       textOutput("check"),
+       leafletOutput("map", height = 600),
+       div(a("data from Charlottesville Open Data Portal",
+             href = "http://opendata.charlottesville.org/datasets?t=Public%20Safety",
+             target = "_blank"),
+           br(),
+           a("built by Nate",
+             href = "https://nateday.me",
+             target = "_blank"))
     )
   )
 ))

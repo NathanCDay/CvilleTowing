@@ -45,7 +45,7 @@ shinyServer(function(input, output) {
         }
     })
     
-    # output$check <- renderText(class(input$chloro))
+    output$check <- renderPrint(input$map_bounds)
    
       map_output <- function() {
           
@@ -60,6 +60,7 @@ shinyServer(function(input, output) {
                         title = "Reported offense")
           }
           if (input$chloro) {
+              lat <- mean(input$map_bounds[])
               out <- leaflet(data(), options = leafletOptions(minZoom = 12, maxZoom = 17)) %>%
                     addProviderTiles("CartoDB.Positron") %>%
                     addPolygons(color = "#a5a597", weight = 1, smoothFactor = 0.3, fillOpacity = .5,
